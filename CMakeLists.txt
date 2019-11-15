@@ -3,4 +3,4 @@ project(cvm C)
 
 set(CMAKE_C_STANDARD 99)
 
-add_executable(cvm main.c vm.h instr.h)
+add_executable(cvm main.c vm.h opcode.h)
