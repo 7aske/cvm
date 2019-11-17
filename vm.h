@@ -37,7 +37,7 @@
 #define STACK_FMT " %c"
 #endif
 
-
+// Utility macros for pushing and popping of off the main stack
 #define pop2(x) x->reg1 = *x->sp, x->sp--; x->reg2 = *x->sp, x->sp--
 #define push2(x) *(++vm->sp) = vm->reg2; *(++vm->sp) = vm->reg1
 #define push2r(x) *(++vm->sp) = vm->reg1; *(++vm->sp) = vm->reg2
@@ -45,16 +45,17 @@
 #define push(x) *(++x->sp) = x->reg1
 
 typedef struct vm {
-	uint8_t* code;
-	int32_t code_size;
-	int32_t* stack;
-	int32_t* data;
+	uint8_t* code;     // code memory
+	int32_t code_size; // size of code memory in bytes
+	int32_t* stack;    // main stack
+	int32_t* data;     // data stack
+
 	//registers
-	uint8_t* ip;    // instruction pointer
-	int32_t* sp;    // stack top
-	int32_t* fp;    // frame pointer
-	int32_t reg1;
-	int32_t reg2;
+	uint8_t* ip;   // instruction pointer
+	int32_t* sp;   // stack top
+	int32_t* fp;   // frame pointer NOT USED
+	int32_t reg1;  // first register
+ 	int32_t reg2;  // second register
 } VM;
 
 
@@ -92,7 +93,7 @@ extern void vm_run(VM* vm) {
 	}
 	while (1) {
 		// print_code(vm);
-		opcode_t opcode = decode(vm->ip);
+		opcode_e opcode = decode(vm->ip);
 		vm->ip++;
 		if (VM_TRACE) {
 			printf("0x%x 0x%0.4x %4s", vm->ip - 1, vm->ip - vm->code - 1, mnemonic(opcode));
@@ -174,6 +175,7 @@ extern void vm_run(VM* vm) {
 				break;
 			case PUT:
 				// pop(vm);
+
 				printf("%d\n", *vm->sp);
 				break;
 			case PUTC:
@@ -194,6 +196,15 @@ extern void vm_run(VM* vm) {
 				} else {
 					next_32(vm->ip);
 					vm->ip += 4;
+				}
+				break;
+			case JZ:
+			pop2(vm);
+				pop(vm);
+				vm->reg2 = next_32(vm->ip);
+				vm->ip += 4;
+				if (vm->reg1 == 0) {
+					vm->ip = vm->code + vm->reg2;
 				}
 				break;
 			case JG:
@@ -258,7 +269,7 @@ extern void vm_run(VM* vm) {
 				push2(vm);
 				break;
 			case SWAP:
-				pop2(vm);
+			pop2(vm);
 				push2r(vm);
 				break;
 			default:
