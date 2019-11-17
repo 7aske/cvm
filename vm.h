@@ -21,9 +21,11 @@
 
 #ifndef VM_TRACE
 #define VM_TRACE 0
+#define PUTC_FMT "%c"
 #else
 #undef VM_TRACE
 #define VM_TRACE 1
+#define PUTC_FMT "%c\n"
 #endif
 
 #ifndef TRACE_CHAR
@@ -38,15 +40,17 @@
 
 #define pop2(x) x->reg1 = *x->sp, x->sp--; x->reg2 = *x->sp, x->sp--
 #define push2(x) *(++vm->sp) = vm->reg2; *(++vm->sp) = vm->reg1
+#define push2r(x) *(++vm->sp) = vm->reg1; *(++vm->sp) = vm->reg2
 #define pop(x) x->reg1 = *x->sp, x->sp--
+#define push(x) *(++x->sp) = x->reg1
 
 typedef struct vm {
-	int8_t* code;
+	uint8_t* code;
 	int32_t code_size;
 	int32_t* stack;
-	int32_t data[DATA_SIZE];
+	int32_t* data;
 	//registers
-	int8_t* ip;    // instruction pointer
+	uint8_t* ip;    // instruction pointer
 	int32_t* sp;    // stack top
 	int32_t* fp;    // frame pointer
 	int32_t reg1;
@@ -56,7 +60,7 @@ typedef struct vm {
 
 void print_stack(const uint32_t* base, const uint32_t* stack) {
 	while (stack > base) {
-		printf(STACK_FMT, *stack == 10 ? 32 : *stack);
+		printf(STACK_FMT, *stack == 10 && TRACE_CHAR ? 32 : *stack);
 		stack--;
 	}
 }
@@ -64,6 +68,7 @@ void print_stack(const uint32_t* base, const uint32_t* stack) {
 extern VM* vm_new(uint8_t* code, uint32_t size) {
 	VM* newvm = calloc(1, sizeof(VM));
 	uint8_t* codeptr = (uint8_t*) calloc(size, sizeof(uint8_t));
+	int32_t* dataptr = (int32_t*) calloc(DATA_SIZE, sizeof(int32_t));
 	newvm->code_size = size;
 	newvm->stack = calloc(STACK_SIZE, sizeof(uint32_t));
 	memcpy(codeptr, code, size * sizeof(uint8_t));
@@ -71,6 +76,7 @@ extern VM* vm_new(uint8_t* code, uint32_t size) {
 	newvm->ip = codeptr;
 	newvm->sp = newvm->stack - 1;
 	newvm->fp = newvm->stack - 1;
+	newvm->data = dataptr - 1;
 }
 
 static void print_code(VM* vm) {
@@ -89,7 +95,7 @@ extern void vm_run(VM* vm) {
 		opcode_t opcode = decode(vm->ip);
 		vm->ip++;
 		if (VM_TRACE) {
-			printf("0x%x 0x%0.2x %4s", vm->ip, vm->ip - vm->code, mnemonic(opcode));
+			printf("0x%x 0x%0.4x %4s", vm->ip - 1, vm->ip - vm->code - 1, mnemonic(opcode));
 			print_stack(vm->fp, vm->sp);
 			printf("\n");
 		}
@@ -121,12 +127,7 @@ extern void vm_run(VM* vm) {
 			case JMP:
 				vm->reg1 = next_32(vm->ip);
 				vm->ip += 4;
-				vm->ip += vm->reg1;
-				break;
-			case JMPB:
-				vm->reg1 = next_32(vm->ip);
-				vm->ip += 4;
-				vm->ip -= vm->reg1;
+				vm->ip = vm->code + vm->reg1;
 				break;
 			case MOV:
 				// TODO: MOV
@@ -152,6 +153,7 @@ extern void vm_run(VM* vm) {
 				break;
 			case TEST:
 			pop2(vm);
+				push2(vm);
 				*(++vm->sp) = vm->reg1 == vm->reg2;
 				break;
 			case XOR:
@@ -176,25 +178,88 @@ extern void vm_run(VM* vm) {
 				break;
 			case PUTC:
 				// pop(vm);
-				printf("%c\n", *vm->sp);
+				printf(PUTC_FMT, *vm->sp);
 				break;
 			case MUL:
 			pop2(vm);
 				*(++vm->sp) = vm->reg1 + vm->reg2;
 				break;
 			case JE:
+			pop2(vm);
+				push2(vm);
+				if (vm->reg1 == vm->reg2) {
+					vm->reg2 = next_32(vm->ip);
+					vm->ip += 4;
+					vm->ip = vm->code + vm->reg2;
+				} else {
+					next_32(vm->ip);
+					vm->ip += 4;
+				}
 				break;
 			case JG:
+			pop2(vm);
+				push2(vm);
+				if (vm->reg1 > vm->reg2) {
+					vm->reg2 = next_32(vm->ip);
+					vm->ip += 4;
+					vm->ip = vm->code + vm->reg2;
+				} else {
+					next_32(vm->ip);
+					vm->ip += 4;
+				}
 				break;
 			case JGE:
+			pop2(vm);
+				push2(vm);
+				if (vm->reg1 >= vm->reg2) {
+					vm->reg2 = next_32(vm->ip);
+					vm->ip += 4;
+					vm->ip = vm->code + vm->reg2;
+				} else {
+					next_32(vm->ip);
+					vm->ip += 4;
+				}
 				break;
 			case JL:
+			pop2(vm);
+				push2(vm);
+				if (vm->reg1 < vm->reg2) {
+					vm->reg2 = next_32(vm->ip);
+					vm->ip += 4;
+					vm->ip = vm->code + vm->reg2;
+				} else {
+					next_32(vm->ip);
+					vm->ip += 4;
+				}
 				break;
 			case JLE:
+			pop2(vm);
+				push2(vm);
+				if (vm->reg1 <= vm->reg2) {
+					vm->reg2 = next_32(vm->ip);
+					vm->ip += 4;
+					vm->ip = vm->code + vm->reg2;
+				} else {
+					next_32(vm->ip);
+					vm->ip += 4;
+				}
 				break;
 			case STOR:
+				pop(vm);
+				*(++vm->data) = vm->reg1;
 				break;
 			case LOAD:
+				vm->reg1 = *vm->data, vm->data--;
+				push(vm);
+				break;
+			case DUP:
+				pop(vm);
+				vm->reg2 = vm->reg1;
+				push2(vm);
+				break;
+			case SWAP:
+				pop2(vm);
+				push2r(vm);
 				break;
 			default:
 				break;

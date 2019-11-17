@@ -75,7 +75,7 @@ typedef enum opcodes {
 			JZ = 0x74,                        // Jump short if zero (ZF = 1).
 	// JCXZ = 0xE3,                 // /*Jump if CX is zero*/
 			JMP = 0xE9,                    // 0xEB 0xFF 0xFF /*Jump*/
-	JMPB = 0xE8,                    // 0xEB 0xFF 0xFF /*Jump*/
+	DUP = 0xE8,                    // 0xEB 0xFF 0xFF /*Jump*/
 	// LAHF = 0x9F,                 // /*Load FLAGS into AH register*/
 	// LDS = 0xC5,                  // /*Load pointer using DS*/
 	// LEA = 0x8D,                  // /*Load Effective Address*/
@@ -128,6 +128,7 @@ typedef enum opcodes {
 	PUTC = 0xFB,
 	STOR = 0xFC,
 	LOAD = 0xFD,
+	SWAP = 0x56
 
 } opcode_t;
 
@@ -140,17 +141,14 @@ static opcode_t decode(uint8_t* code) {
 #include <stdio.h>
 
 extern uint32_t next_32(uint8_t* code) {
-	uint8_t temp = *code;
-	int32_t val = (uint32_t) (temp >> 24u);
+	int32_t val = 0;
+	val |= *code << 24;
 	code++;
-	temp = *code;
-	val += (uint32_t) (temp >> 16u);
+	val |= *code << 16;
 	code++;
-	temp = *code;
-	val += (uint32_t) (temp >> 8u);
+	val |= *code << 8;
 	code++;
-	temp = *code;
-	val += (uint32_t) temp;
+	val |= *code;
 	return val;
 }
 
@@ -172,8 +170,6 @@ extern char* mnemonic(opcode_t opcode) {
 			return "INC";
 		case JMP:
 			return "JMP";
-		case JMPB:
-			return "JMPB";
 		case MOV:
 			return "MOV";
 		case NOP:
@@ -218,6 +214,10 @@ extern char* mnemonic(opcode_t opcode) {
 			return "STOR";
 		case LOAD:
 			return "LOAD";
+		case DUP:
+			return "DUP";
+		case SWAP:
+			return "SWAP";
 		default:
 			return "";
 	}
